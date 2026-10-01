@@ -39,9 +39,16 @@ const CONFIG = {
     sombraCard: '0 2px 8px rgba(42,24,16,.08)'
   },
 
-  // Mecanismo de prêmio deste cliente: 'ROLETA' (sorteio + cupom) ou 'FIDELIDADE' (cartão de
-  // selos). Troca o destino final de index.html, o modo de caixa.html e o painel de admin.html.
-  REWARD_MODE: 'FIDELIDADE',
+  // Mecanismo de prêmio da PESQUISA (index.html/admin.html), só isso: 'ROLETA' (sorteio +
+  // cupom) ou 'NENHUM' (agradecimento simples, sem prêmio — a resposta é gravada do mesmo
+  // jeito, via "register", só que com Premio Roleta e Status Uso = '-'). Troca o destino final
+  // de index.html, o modo de caixa.html (parte do cupom) e os painéis de prêmio/status do
+  // admin.html. Independente de LOYALTY_ENABLED abaixo — são dois produtos (ver CLAUDE.md).
+  REWARD_MODE: 'NENHUM',
+
+  // Liga o módulo de cartão fidelidade (fidelidade.html + caixa.html, parte de selos +
+  // admin-fidelidade.html), independente do que REWARD_MODE faz na pesquisa.
+  LOYALTY_ENABLED: true,
 
   // Geolocalização (só index.html) — SUBSTITUIR pelas coordenadas do restaurante.
   RESTAURANT_LAT: -23.5505,
@@ -79,6 +86,11 @@ const CONFIG = {
   REVIEW_THANKS_TEXT: 'Quando terminar de escrever sua avaliação, toque no botão abaixo para continuar.',
   REVIEW_BTN_DONE: 'Já avaliei',
 
+  // Tela final da pesquisa quando REWARD_MODE é 'NENHUM' (sem roleta/cupom) — só agradecimento,
+  // depois do CSAT + feedback (e do convite ao Google, se as 3 notas foram 5).
+  SURVEY_DONE_TITLE: 'Obrigado pela sua avaliação!',
+  SURVEY_DONE_TEXT: 'Sua opinião foi registrada. Volte sempre!',
+
   QUESTIONS: [
     'Como foi a qualidade da comida e o sabor?',
     'Como foi a velocidade e a qualidade do atendimento?',
@@ -103,7 +115,7 @@ const CONFIG = {
   // Admin (só admin.html)
   ADMIN_TITLE: 'Painel administrativo',
 
-  // ---- Cartão fidelidade (só quando REWARD_MODE === 'FIDELIDADE') ----------
+  // ---- Cartão fidelidade (só quando LOYALTY_ENABLED) ----------
   // Selos necessários pra liberar o prêmio. Manter igual à constante LOYALTY_GOAL do Code.gs
   // (a regra que vale é a do backend — mesmo motivo do COUPON_VALIDITY_DAYS acima).
   LOYALTY_GOAL: 10,

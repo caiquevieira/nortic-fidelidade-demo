@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -201,6 +201,9 @@
           <p class="eyebrow" style="margin:0">Validação de cupons</p>
           <button class="link" id="btn-logout" type="button">Sair</button>
         </div>
+        <!-- Só aparece se este deployment TAMBÉM tiver o cartão fidelidade ligado
+             (CONFIG.LOYALTY_ENABLED) — os dois produtos podem coexistir no mesmo caixa.html. -->
+        <button class="link" id="btn-go-fid" type="button" hidden style="display:block;margin:0 0 14px">Cartão fidelidade</button>
         <h2 tabindex="-1">Qual é o código?</h2>
         <p class="muted">Digite o código que o cliente mostrou ou informou.</p>
         <div class="field">
@@ -233,7 +236,7 @@
       </div>
     </section>
 
-    <!-- Menu do cartão fidelidade (só quando CONFIG.REWARD_MODE === 'FIDELIDADE') -->
+    <!-- Menu do cartão fidelidade (só quando CONFIG.LOYALTY_ENABLED) -->
     <section class="screen" id="s-fid-menu">
       <div class="card">
         <div class="topline">
@@ -243,6 +246,9 @@
         <h2 tabindex="-1">O que você quer fazer?</h2>
         <button class="btn" id="btn-go-selo" type="button">Adicionar selo</button>
         <button class="btn ghost" id="btn-go-resgate" type="button">Confirmar resgate de prêmio</button>
+        <!-- Só aparece se este deployment TAMBÉM tiver a roleta ligada (REWARD_MODE === 'ROLETA')
+             — os dois produtos podem coexistir no mesmo caixa.html. -->
+        <button class="link" id="btn-go-cupom" type="button" hidden style="display:block;margin:14px auto 0">Validar cupom da pesquisa</button>
       </div>
     </section>
 
@@ -459,10 +465,12 @@
     goPostLogin();
   }
 
-  // Modo cupom (roleta) vai direto pra consulta; modo fidelidade vai pro menu (adicionar
-  // selo / confirmar resgate), já que são dois fluxos diferentes.
+  // Dois produtos independentes no mesmo caixa.html: LOYALTY_ENABLED manda pro menu de
+  // fidelidade (adicionar selo / confirmar resgate); senão, REWARD_MODE === 'ROLETA' manda pra
+  // consulta de cupom. Se os dois estiverem ligados ao mesmo tempo, cada tela ganha um link pra
+  // trocar pro outro fluxo (ver botões #btn-go-cupom/#btn-go-fid).
   function goPostLogin() {
-    if (CONFIG.REWARD_MODE === 'FIDELIDADE') goFidMenu();
+    if (CONFIG.LOYALTY_ENABLED) goFidMenu();
     else goLookup();
   }
 
@@ -678,18 +686,26 @@
     initBrand();
     $('#form-login').addEventListener('submit', login);
     $('#btn-logout').addEventListener('click', () => logout());
-    const code = $('#in-code');
-    code.addEventListener('input', () => {
-      // Colar "UND-K7Q4" inteiro também funciona: o campo guarda só a parte do código.
-      const part = codePart(code.value, CONFIG.COUPON_PREFIX);
-      if (code.value !== part) code.value = part;
-      updateLookupBtn();
-    });
-    $('#form-lookup').addEventListener('submit', lookup);
-    $('#btn-confirm').addEventListener('click', confirmRedeem);
-    $('#btn-back').addEventListener('click', () => goLookup());
+    if (CONFIG.REWARD_MODE === 'ROLETA') {
+      const code = $('#in-code');
+      code.addEventListener('input', () => {
+        // Colar "UND-K7Q4" inteiro também funciona: o campo guarda só a parte do código.
+        const part = codePart(code.value, CONFIG.COUPON_PREFIX);
+        if (code.value !== part) code.value = part;
+        updateLookupBtn();
+      });
+      $('#form-lookup').addEventListener('submit', lookup);
+      $('#btn-confirm').addEventListener('click', confirmRedeem);
+      $('#btn-back').addEventListener('click', () => goLookup());
 
-    if (CONFIG.REWARD_MODE === 'FIDELIDADE') {
+      // Só mostra o link de troca se o outro produto (fidelidade) TAMBÉM estiver ligado.
+      if (CONFIG.LOYALTY_ENABLED) {
+        $('#btn-go-fid').hidden = false;
+        $('#btn-go-fid').addEventListener('click', goFidMenu);
+      }
+    }
+
+    if (CONFIG.LOYALTY_ENABLED) {
       $('#btn-logout-fid').addEventListener('click', () => logout());
       $('#btn-go-selo').addEventListener('click', goFidSelo);
       $('#btn-go-resgate').addEventListener('click', goFidResgate);
@@ -713,6 +729,12 @@
         updateFidConfirmarBtn();
       });
       $('#form-fid-resgate').addEventListener('submit', confirmarResgateFidelidade);
+
+      // Só mostra o link de troca se o outro produto (roleta) TAMBÉM estiver ligado.
+      if (CONFIG.REWARD_MODE === 'ROLETA') {
+        $('#btn-go-cupom').hidden = false;
+        $('#btn-go-cupom').addEventListener('click', () => goLookup());
+      }
     }
 
     state.senha = passGet();

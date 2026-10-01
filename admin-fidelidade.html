@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F7F7F7">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel do cartão fidelidade</title>
+<!-- CONFIG e o tema visual (theme.js) vêm antes do <style>/<script> abaixo, pra já aplicar o
+     tema no primeiro paint. Página independente de admin.html: não compartilha sessão nem
+     nenhuma chamada de dado da pesquisa — só a ação fidelidadeAdmin. -->
+<script src="config.js"></script>
+<script src="theme.js"></script>
+<style>
+  :root {
+    --tema-fundo: #F7F7F7;
+    --tema-texto: #000000;
+    --tema-texto-secundario: #6B6B6B;
+    --tema-card: #FFFFFF;
+    --tema-borda: #E0E0E0;
+    --tema-primaria: #000000;
+    --tema-texto-sobre-primaria: #FFD100;
+    --tema-fonte-titulo: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --tema-fonte-corpo: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --tema-sombra-card: 0 2px 8px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--tema-fundo);
+    color: var(--tema-texto);
+    font-family: var(--tema-fonte-corpo);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ---------- Login ---------- */
+  #login-screen {
+    min-height: 100vh; min-height: 100dvh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 24px calc(24px + 56px);
+  }
+  .login-card {
+    width: 100%; max-width: 360px;
+    background: var(--tema-card); border: 1px solid var(--tema-borda);
+    box-shadow: var(--tema-sombra-card); border-radius: 16px; padding: 32px 28px;
+  }
+  .login-card img { height: 48px; max-width: 70%; object-fit: contain; margin-bottom: 18px; display: block; }
+  .login-card .logo-placeholder {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 2px dashed var(--tema-texto); border-radius: 14px;
+    padding: 10px 22px; margin-bottom: 18px; opacity: .55;
+    font-weight: 800; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  }
+  .login-card h1 { font-size: 21px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.01em; font-family: var(--tema-fonte-titulo); }
+  .login-card p { font-size: 14px; color: var(--tema-texto-secundario); margin: 0 0 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+  .field { margin-bottom: 16px; }
+  input[type="text"], input[type="password"] {
+    width: 100%; padding: 12px 14px;
+    border: 1.5px solid var(--tema-texto); border-radius: 10px;
+    font-size: 16px; background: var(--tema-fundo); color: var(--tema-texto);
+  }
+  input:focus { outline: none; border-color: var(--tema-texto); }
+  .btn-primary {
+    width: 100%; padding: 14px;
+    background: var(--tema-primaria); color: var(--tema-texto-sobre-primaria);
+    border: none; border-radius: 999px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: transform .12s ease, opacity .2s ease;
+  }
+  .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .login-error { color: #B3261E; font-size: 13px; font-weight: 600; margin: -6px 0 16px; display: none; }
+
+  /* ---------- Dashboard ---------- */
+  #dashboard { display: none; padding: 20px 20px calc(60px + 56px); max-width: 900px; margin: 0 auto; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; }
+  .topbar-brand img { height: 32px; width: 32px; object-fit: contain; border-radius: 8px; }
+  .topbar h1 { font-size: 20px; font-weight: 800; margin: 0; font-family: var(--tema-fonte-titulo); }
+  .topbar .sub { font-size: 13px; color: var(--tema-texto-secundario); margin-top: 2px; }
+  .btn-secondary {
+    background: var(--tema-card); border: 1.5px solid var(--tema-borda); color: var(--tema-texto);
+    border-radius: 999px; padding: 8px 18px;
+    font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .kpi-card {
+    background: var(--tema-card); border: 1px solid var(--tema-borda);
+    box-shadow: var(--tema-sombra-card); border-radius: 14px; padding: 16px 18px;
+  }
+  .kpi-label { font-size: 12px; color: var(--tema-texto-secundario); font-weight: 600; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; }
+
+  .panel {
+    background: var(--tema-card); border: 1px solid var(--tema-borda);
+    box-shadow: var(--tema-sombra-card); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 15px; font-weight: 700; margin: 0 0 4px; font-family: var(--tema-fonte-titulo); }
+  .panel .panel-sub { font-size: 12px; color: var(--tema-texto-secundario); margin: 0 0 14px; }
+
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+  .filter-row .field { margin-bottom: 0; flex: 1 1 200px; }
+  .filter-row select {
+    padding: 10px 12px; border: 1.5px solid var(--tema-texto); border-radius: 10px;
+    font-size: 14px; background: var(--tema-fundo); color: var(--tema-texto); font-family: inherit;
+  }
+  .toggle-btn {
+    padding: 10px 16px; border: 1.5px solid var(--tema-texto); border-radius: 999px;
+    background: var(--tema-card); color: var(--tema-texto);
+    font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  .toggle-btn.active { background: var(--tema-primaria); color: var(--tema-texto-sobre-primaria); border-color: var(--tema-primaria); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--tema-texto-secundario); font-weight: 600; font-size: 11.5px;
+       padding: 8px 10px; border-bottom: 1px solid var(--tema-borda); white-space: nowrap; }
+  td { padding: 10px 10px; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .name-cell { font-weight: 600; white-space: nowrap; }
+  .empty-note { font-size: 13px; color: var(--tema-texto-secundario); padding: 8px 0; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; white-space: nowrap; background: #E3F3E4; color: #216E29; }
+
+  .page-btn {
+    border: 1.5px solid var(--tema-borda); background: var(--tema-card); border-radius: 999px;
+    padding: 7px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--tema-texto);
+  }
+  .page-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .pagination {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    margin-top: 14px; font-size: 12.5px; font-weight: 700; color: var(--tema-texto-secundario);
+  }
+
+  /* Rodapé fixo, igual às outras páginas — NÃO faz parte do tema (marca da Underline). */
+  .site-footer {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    display: flex; justify-content: center;
+    padding: 10px max(16px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom));
+    background: rgba(247, 247, 247, .92);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid #E0E0E0;
+  }
+  .site-footer a {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: #000000; text-decoration: none;
+    font-size: .72rem; font-weight: 700; letter-spacing: .01em;
+  }
+  .site-footer img { height: 24px; width: 24px; object-fit: contain; border-radius: 6px; display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div id="login-logo"></div>
+    <h1 id="login-title">Painel do cartão fidelidade</h1>
+    <p id="login-subtitle"></p>
+    <div>
+      <div class="field">
+        <label for="in-user">Usuário</label>
+        <input type="text" id="in-user" autocomplete="username" autocapitalize="off">
+      </div>
+      <div class="field">
+        <label for="in-pass">Senha</label>
+        <input type="password" id="in-pass" autocomplete="current-password">
+      </div>
+      <p class="login-error" id="login-error"></p>
+      <button type="button" class="btn-primary" id="btn-login">Entrar</button>
+    </div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div id="topbar-logo"></div>
+      <div>
+        <h1>Painel do cartão fidelidade</h1>
+        <div class="sub" id="period-label">Carregando…</div>
+      </div>
+    </div>
+    <button class="btn-secondary" id="btn-logout" type="button">Sair</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Clientes</div>
+      <div class="kpi-value" id="kpi-clientes">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Selos distribuídos</div>
+      <div class="kpi-value" id="kpi-selos">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Resgates totais</div>
+      <div class="kpi-value" id="kpi-resgates">–</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Prêmios aguardando resgate</div>
+      <div class="kpi-value" id="kpi-aguardando">–</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Clientes</h2>
+    <p class="panel-sub">Nome ou telefone (o telefone compara só os dígitos, com ou sem máscara)</p>
+    <div class="filter-row">
+      <div class="field">
+        <label for="in-busca" class="sr-only" style="display:none">Buscar</label>
+        <input type="text" id="in-busca" placeholder="Nome ou telefone" style="width:100%;padding:10px 12px;border:1.5px solid var(--tema-texto);border-radius:10px;font-size:14px;background:var(--tema-fundo);color:var(--tema-texto)">
+      </div>
+      <select id="sel-ordenar">
+        <option value="selos-desc">Selos atuais (maior primeiro)</option>
+        <option value="selos-asc">Selos atuais (menor primeiro)</option>
+        <option value="atividade-desc">Última atividade (mais recente)</option>
+        <option value="atividade-asc">Última atividade (mais antiga)</option>
+      </select>
+      <button type="button" class="toggle-btn" id="btn-filtro-premio">Prêmio disponível</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Nome</th><th>Telefone</th><th>Selos atuais</th><th>Selos total</th><th>Resgates</th><th>Última atividade</th></tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+    <p class="empty-note" id="empty-note" hidden></p>
+    <div class="pagination" id="pagination">
+      <button class="page-btn" id="btn-page-prev" type="button">&larr; Anterior</button>
+      <span id="page-label">Página 1 de 1</span>
+      <button class="page-btn" id="btn-page-next" type="button">Próxima &rarr;</button>
+    </div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <a href="https://underlinelab.com.br" target="_blank" rel="noopener">
+    <img src="Assets/underline-logo.jpeg" alt="" width="24" height="24">
+    <span>Desenvolvido por Underline</span>
+  </a>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const loginScreen = $('#login-screen');
+  const dashboard = $('#dashboard');
+  // Chave própria, diferente da de admin.html — páginas independentes, sem sessão compartilhada.
+  const SESSION_KEY = 'underline-admin-fidelidade-session';
+  const PAGE_SIZE = 20;
+
+  let ALL = [];
+  let busca = '';
+  let ordenar = 'selos-desc';
+  let somentePremioDisponivel = false;
+  let page = 1;
+
+  /* ---------- Marca (mesmo padrão das outras páginas) ---------- */
+  function buildLogo(target) {
+    const src = CONFIG.LOGO_DATA_URI || CONFIG.LOGO_URL;
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = CONFIG.RESTAURANT_NAME;
+      target.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'logo-placeholder';
+      ph.textContent = 'Seu logo aqui';
+      target.appendChild(ph);
+    }
+  }
+  function buildTopbarLogo(target) {
+    const src = CONFIG.LOGO_DATA_URI || CONFIG.LOGO_URL;
+    if (!src) return;
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = CONFIG.RESTAURANT_NAME;
+    target.appendChild(img);
+  }
+
+  /* ---------- Backend — só a ação fidelidadeAdmin, mesmo padrão de retry das outras páginas ---------- */
+  async function apiCallOnce(payload) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 30000);
+    try {
+      const res = await fetch(CONFIG.WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        signal: ctrl.signal
+      });
+      return await res.json();
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const API_MAX_ATTEMPTS = 3;
+  async function apiCall(payload) {
+    let last = null;
+    for (let attempt = 0; attempt < API_MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, CONFIG.API_RETRY_DELAY_MS * attempt));
+      const r = await apiCallOnce(payload);
+      if (r && typeof r.ok === 'boolean') {
+        if (!r.transient) return r;
+        last = r;
+      }
+    }
+    return last || { ok: false, network: true, error: 'Não foi possível conectar ao servidor. Verifique sua internet.' };
+  }
+  function fetchFidelidadeAdmin(senha) {
+    return apiCall({ action: 'fidelidadeAdmin', senha: senha });
+  }
+
+  function parseRow(r) {
+    const d = r.ultimaAtividade ? new Date(r.ultimaAtividade) : null;
+    return {
+      telefone: r.telefone || '',
+      nome: r.nome || '',
+      selosAtuais: Number(r.selosAtuais) || 0,
+      selosTotal: Number(r.selosTotal) || 0,
+      resgatesTotal: Number(r.resgatesTotal) || 0,
+      ultimaAtividade: d && !isNaN(d.getTime()) ? d : null
+    };
+  }
+
+  /* ---------- Login ---------- */
+  async function tryLogin() {
+    const pass = $('#in-pass').value;
+    const btn = $('#btn-login');
+    const err = $('#login-error');
+    err.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+
+    const r = await fetchFidelidadeAdmin(pass);
+
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+
+    // Mesmo princípio de admin.html: login só é válido quando o backend de fato devolve os
+    // dados, nunca por comparação de string aqui no front-end.
+    if (r && r.ok === true && Array.isArray(r.rows)) {
+      ALL = r.rows.map(parseRow);
+      try { sessionStorage.setItem(SESSION_KEY, pass); } catch (e) { /* ignora */ }
+      showDashboard();
+    } else {
+      err.textContent = (r && r.error) ? r.error : 'Não foi possível entrar.';
+      err.style.display = 'block';
+    }
+  }
+
+  function logout() {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* ignora */ }
+    ALL = [];
+    busca = '';
+    ordenar = 'selos-desc';
+    somentePremioDisponivel = false;
+    page = 1;
+    $('#in-busca').value = '';
+    $('#btn-filtro-premio').classList.remove('active');
+    dashboard.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    $('#in-pass').value = '';
+    $('#in-pass').focus();
+  }
+
+  function showDashboard() {
+    loginScreen.style.display = 'none';
+    dashboard.style.display = 'block';
+    render();
+  }
+
+  /* ---------- Busca/ordenação/filtro — tudo local, sem nova chamada ao backend ---------- */
+  // NFD + remove diacríticos + minúsculas, pra "joao"/"João" e "jose"/"José" darem o mesmo resultado.
+  function normalizarTexto(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  }
+  function soDigitos(s) {
+    return String(s || '').replace(/\D/g, '');
+  }
+
+  function computeRows() {
+    let rows = ALL;
+
+    const termo = busca.trim();
+    if (termo) {
+      const termoDigitos = soDigitos(termo);
+      const termoTexto = normalizarTexto(termo);
+      rows = rows.filter(r => {
+        const nomeBate = termoTexto && normalizarTexto(r.nome).includes(termoTexto);
+        const telefoneBate = termoDigitos && soDigitos(r.telefone).includes(termoDigitos);
+        return nomeBate || telefoneBate;
+      });
+    }
+
+    if (somentePremioDisponivel) {
+      rows = rows.filter(r => r.selosAtuais >= CONFIG.LOYALTY_GOAL);
+    }
+
+    const sorted = rows.slice();
+    switch (ordenar) {
+      case 'selos-asc': sorted.sort((a, b) => a.selosAtuais - b.selosAtuais); break;
+      case 'atividade-desc': sorted.sort((a, b) => (b.ultimaAtividade || 0) - (a.ultimaAtividade || 0)); break;
+      case 'atividade-asc': sorted.sort((a, b) => (a.ultimaAtividade || 0) - (b.ultimaAtividade || 0)); break;
+      case 'selos-desc':
+      default: sorted.sort((a, b) => b.selosAtuais - a.selosAtuais); break;
+    }
+    return sorted;
+  }
+
+  function render() {
+    const total = ALL.length;
+    const comSelo = ALL.filter(r => r.selosTotal > 0).length;
+    const selosDistribuidos = ALL.reduce((a, r) => a + r.selosTotal, 0);
+    const resgates = ALL.reduce((a, r) => a + r.resgatesTotal, 0);
+    const aguardando = ALL.filter(r => r.selosAtuais >= CONFIG.LOYALTY_GOAL).length;
+
+    $('#period-label').textContent = total + ' cliente' + (total === 1 ? '' : 's') + ' cadastrado' + (total === 1 ? '' : 's');
+    $('#kpi-clientes').textContent = comSelo;
+    $('#kpi-selos').textContent = selosDistribuidos;
+    $('#kpi-resgates').textContent = resgates;
+    $('#kpi-aguardando').textContent = aguardando;
+
+    renderTable();
+  }
+
+  function renderTable() {
+    const rows = computeRows();
+    const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    if (page < 1) page = 1;
+    const start = (page - 1) * PAGE_SIZE;
+    const pageRows = rows.slice(start, start + PAGE_SIZE);
+
+    $('#page-label').textContent = 'Página ' + page + ' de ' + totalPages + ' (' + rows.length + ' cliente' + (rows.length === 1 ? '' : 's') + ')';
+    $('#btn-page-prev').disabled = page <= 1;
+    $('#btn-page-next').disabled = page >= totalPages;
+
+    const tbody = $('#table-body');
+    tbody.innerHTML = ''; // limpo, depois só textContent por célula — nunca innerHTML com dado do backend
+    const emptyNote = $('#empty-note');
+
+    if (!pageRows.length) {
+      emptyNote.hidden = false;
+      emptyNote.textContent = ALL.length ? 'Nenhum cliente encontrado com esse filtro.' : 'Nenhum cliente cadastrado ainda.';
+      return;
+    }
+    emptyNote.hidden = true;
+
+    pageRows.forEach(r => {
+      const tr = document.createElement('tr');
+
+      const tdNome = document.createElement('td');
+      tdNome.className = 'name-cell';
+      tdNome.textContent = r.nome || '—';
+      tr.appendChild(tdNome);
+
+      const tdTelefone = document.createElement('td');
+      tdTelefone.textContent = r.telefone || '—';
+      tr.appendChild(tdTelefone);
+
+      const tdSelosAtuais = document.createElement('td');
+      tdSelosAtuais.textContent = String(r.selosAtuais);
+      tr.appendChild(tdSelosAtuais);
+
+      const tdSelosTotal = document.createElement('td');
+      tdSelosTotal.textContent = String(r.selosTotal);
+      tr.appendChild(tdSelosTotal);
+
+      const tdResgates = document.createElement('td');
+      tdResgates.textContent = String(r.resgatesTotal);
+      tr.appendChild(tdResgates);
+
+      const tdAtividade = document.createElement('td');
+      if (r.ultimaAtividade) {
+        const d = r.ultimaAtividade;
+        const pad = n => String(n).padStart(2, '0');
+        tdAtividade.textContent = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      } else {
+        tdAtividade.textContent = '—';
+      }
+      tr.appendChild(tdAtividade);
+
+      if (r.selosAtuais >= CONFIG.LOYALTY_GOAL) {
+        const tdSelosAtuaisPill = document.createElement('span');
+        tdSelosAtuaisPill.className = 'pill';
+        tdSelosAtuaisPill.textContent = 'Prêmio disponível';
+        tdSelosAtuais.appendChild(document.createElement('br'));
+        tdSelosAtuais.appendChild(tdSelosAtuaisPill);
+      }
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ---------- Inicialização ---------- */
+  buildLogo($('#login-logo'));
+  buildTopbarLogo($('#topbar-logo'));
+  $('#login-subtitle').textContent = CONFIG.RESTAURANT_NAME + ' · cartão fidelidade';
+  document.title = 'Painel do cartão fidelidade — ' + CONFIG.RESTAURANT_NAME;
+
+  $('#btn-login').addEventListener('click', tryLogin);
+  $('#in-pass').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+  $('#btn-logout').addEventListener('click', logout);
+
+  $('#in-busca').addEventListener('input', () => {
+    busca = $('#in-busca').value;
+    page = 1;
+    renderTable();
+  });
+  $('#sel-ordenar').addEventListener('change', () => {
+    ordenar = $('#sel-ordenar').value;
+    page = 1;
+    renderTable();
+  });
+  $('#btn-filtro-premio').addEventListener('click', () => {
+    somentePremioDisponivel = !somentePremioDisponivel;
+    $('#btn-filtro-premio').classList.toggle('active', somentePremioDisponivel);
+    page = 1;
+    renderTable();
+  });
+  $('#btn-page-prev').addEventListener('click', () => { page--; renderTable(); });
+  $('#btn-page-next').addEventListener('click', () => { page++; renderTable(); });
+
+  (async function tryAutoLogin() {
+    let saved;
+    try { saved = sessionStorage.getItem(SESSION_KEY); } catch (e) { saved = null; }
+    if (!saved) return;
+    const r = await fetchFidelidadeAdmin(saved);
+    if (r && r.ok === true && Array.isArray(r.rows)) {
+      ALL = r.rows.map(parseRow);
+      showDashboard();
+    } else {
+      try { sessionStorage.removeItem(SESSION_KEY); } catch (e2) { /* ignora */ }
+    }
+  })();
+})();
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -7,7 +7,7 @@
 <title>Cartão fidelidade</title>
 <meta name="robots" content="noindex, nofollow">
 <!-- CONFIG e o tema visual (theme.js) vêm antes do <style>/<script> abaixo, pra já aplicar o
-     tema no primeiro paint. Compartilhados com index.html, caixa.html e admin.html. -->
+     tema no primeiro paint. Compartilhados com as outras páginas deste deployment. -->
 <script src="config.js"></script>
 <script src="theme.js"></script>
 <style>
@@ -189,7 +189,6 @@
         <div class="loyalty-stamps" id="card-stamps"></div>
         <p class="muted" id="card-progress-text"></p>
         <div class="msg" id="card-msg" role="alert" hidden></div>
-        <a class="btn" id="btn-nova-avaliacao" href="index.html" style="text-decoration:none;text-align:center">Nova avaliação</a>
         <button class="btn" id="btn-retirar-premio" type="button" hidden>Retirar prêmio</button>
       </div>
     </section>
@@ -226,7 +225,7 @@
 
   const $ = sel => document.querySelector(sel);
   // Guarda só o telefone (não o cartão inteiro): a consulta é sempre refeita no servidor,
-  // que é quem manda nos selos. Mesmo padrão de chave de index.html/caixa.html.
+  // que é quem manda nos selos. Mesmo padrão de chave usado nas outras páginas.
   const PHONE_KEY = CONFIG.STORAGE_KEY + '-fidelidade';
 
   const state = { telefone: '', nome: '', selosAtuais: 0, meta: CONFIG.LOYALTY_GOAL };
