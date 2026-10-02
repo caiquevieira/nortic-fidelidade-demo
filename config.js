@@ -50,7 +50,8 @@ const CONFIG = {
   // admin-fidelidade.html), independente do que REWARD_MODE faz na pesquisa.
   LOYALTY_ENABLED: true,
 
-  // Geolocalização (só index.html) — SUBSTITUIR pelas coordenadas do restaurante.
+  // Geolocalização — SUBSTITUIR pelas coordenadas do restaurante. Usada por index.html (pesquisa)
+  // e por fidelidade.html no check-in self-service por NFC/QR (LOYALTY_CHECKIN_ENABLED abaixo).
   RESTAURANT_LAT: -23.5505,
   RESTAURANT_LNG: -46.6333,
   MAX_DISTANCE_METERS: 2000000000, // TEMPORÁRIO (testes): voltar para 150
@@ -130,5 +131,18 @@ const CONFIG = {
   LOYALTY_REDEEM_BUTTON_TEXT: 'Retirar prêmio',
   LOYALTY_REDEEM_INSTRUCTION: 'Mostre este código ao garçom para retirar o seu prêmio.',
   LOYALTY_REDEEM_POLICY_TEXT: 'Válido para retirada nesta visita, mediante confirmação do estabelecimento.',
-  LOYALTY_NOT_FOUND_MESSAGE: 'Não encontramos um cartão fidelidade com esse telefone. Peça ao garçom para vincular seu telefone na próxima compra.'
+  LOYALTY_NOT_FOUND_MESSAGE: 'Não encontramos um cartão fidelidade com esse telefone. Peça ao garçom para vincular seu telefone na próxima compra.',
+
+  // Check-in self-service do selo por NFC/QR (placa física perto do caixa, URL fixa
+  // fidelidade.html?checkin=1 — ver CLAUDE.md). false desliga o recurso: o parâmetro ?checkin=1
+  // é ignorado e a página volta a só mostrar o cartão. Reaproveita RESTAURANT_LAT/LNG/
+  // MAX_DISTANCE_METERS (acima) e o limite diário do Code.gs como única barreira contra abuso —
+  // o selo não depende mais de o atendente confirmar a cobrança (trade-off aceito).
+  LOYALTY_CHECKIN_ENABLED: true,
+  LOYALTY_CHECKIN_PHONE_TITLE: 'Check-in da visita',
+  LOYALTY_CHECKIN_PHONE_TEXT: 'Informe seu telefone para registrar sua visita de hoje e ganhar um selo.',
+  LOYALTY_CHECKIN_NAME_TEXT: 'Primeira vez aqui? Informe seu nome para criar seu cartão.',
+  LOYALTY_CHECKIN_BUTTON_TEXT: 'Confirmar check-in',
+  LOYALTY_CHECKIN_SUCCESS_TEXT: 'Selo adicionado! Volte sempre.',
+  LOYALTY_CHECKIN_ALREADY_TEXT: 'Você já fez check-in hoje. Volte amanhã para o próximo selo.'
 };

@@ -207,6 +207,34 @@
         <button class="btn ghost" id="btn-redeem-back" type="button">Voltar ao cartão</button>
       </div>
     </section>
+
+    <!-- Check-in: geolocalização bloqueada (placa NFC/QR perto do caixa) -->
+    <section class="screen" id="s-checkin-geo">
+      <div class="card">
+        <h2 tabindex="-1" id="checkin-geo-title"></h2>
+        <p id="checkin-geo-text"></p>
+        <button class="btn" id="btn-checkin-geo-retry" type="button">Tentar novamente</button>
+      </div>
+    </section>
+
+    <!-- Check-in: telefone (+ nome, só se for cadastro novo) -->
+    <section class="screen" id="s-checkin-phone">
+      <form class="card" id="form-checkin" novalidate>
+        <p class="eyebrow">Check-in</p>
+        <h2 tabindex="-1" id="checkin-title"></h2>
+        <p class="muted" id="checkin-text"></p>
+        <div class="field">
+          <label for="in-checkin-phone">WhatsApp</label>
+          <input id="in-checkin-phone" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="15" placeholder="(11) 91234-5678">
+        </div>
+        <div class="field" id="checkin-name-field" hidden>
+          <label for="in-checkin-name">Nome</label>
+          <input id="in-checkin-name" type="text" maxlength="120" placeholder="Seu nome" autocomplete="name">
+        </div>
+        <div class="msg" id="checkin-msg" role="alert" hidden></div>
+        <button class="btn" id="btn-checkin" type="submit" disabled>Confirmar check-in</button>
+      </form>
+    </section>
   </main>
 </div>
 
@@ -228,7 +256,12 @@
   // que é quem manda nos selos. Mesmo padrão de chave usado nas outras páginas.
   const PHONE_KEY = CONFIG.STORAGE_KEY + '-fidelidade';
 
-  const state = { telefone: '', nome: '', selosAtuais: 0, meta: CONFIG.LOYALTY_GOAL };
+  const state = { telefone: '', nome: '', selosAtuais: 0, meta: CONFIG.LOYALTY_GOAL, checkinRequestId: '' };
+
+  function newRequestId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  }
 
   /* ---------- Utilidades ---------- */
   function show(id) {
@@ -360,6 +393,119 @@
     setMsg($('#card-msg'), '');
   }
 
+  /* ---------- Check-in self-service (placa NFC/QR perto do caixa) ---------- */
+  // Mesmo padrão de geolocalização do index.html (haversine + getPosition), copiado aqui porque
+  // as duas páginas não compartilham JS além de config.js/theme.js (ver CLAUDE.md).
+  function haversine(lat1, lng1, lat2, lng2) {
+    const R = 6371000, rad = Math.PI / 180;
+    const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function getPosition() {
+    return new Promise((resolve, reject) => {
+      if (!window.isSecureContext || !('geolocation' in navigator)) return reject({ code: 0 });
+      navigator.geolocation.getCurrentPosition(resolve, reject,
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+    });
+  }
+  const CHECKIN_GEO_MSGS = {
+    denied:      ['Ative a localização', 'Para fazer o check-in, permita o acesso à localização do seu aparelho nas configurações do navegador e tente novamente.'],
+    unsupported: ['Localização indisponível', 'Este navegador não consegue verificar a localização. Abra o link em um navegador atualizado, por um endereço seguro (HTTPS).'],
+    unavailable: ['Não foi possível obter sua localização', 'Verifique se o GPS está ativado e tente novamente.'],
+    far:         ['Fora do estabelecimento', 'O check-in só pode ser feito dentro do estabelecimento.']
+  };
+  function showCheckinGeo(kind) {
+    $('#checkin-geo-title').textContent = CHECKIN_GEO_MSGS[kind][0];
+    $('#checkin-geo-text').textContent = CHECKIN_GEO_MSGS[kind][1];
+    show('s-checkin-geo');
+  }
+
+  async function runCheckin() {
+    try {
+      const pos = await getPosition();
+      const d = haversine(pos.coords.latitude, pos.coords.longitude, CONFIG.RESTAURANT_LAT, CONFIG.RESTAURANT_LNG);
+      if (d <= CONFIG.MAX_DISTANCE_METERS) goCheckinPhone();
+      else showCheckinGeo('far');
+    } catch (e) {
+      showCheckinGeo(e.code === 1 ? 'denied' : e.code === 0 ? 'unsupported' : 'unavailable');
+    }
+  }
+
+  function validateCheckinPhone() {
+    const ok = PHONE_RE.test($('#in-checkin-phone').value);
+    $('#btn-checkin').disabled = !ok;
+    return ok;
+  }
+
+  function goCheckinPhone() {
+    setMsg($('#checkin-msg'), '');
+    $('#checkin-name-field').hidden = true;
+    $('#in-checkin-name').value = '';
+    $('#checkin-title').textContent = CONFIG.LOYALTY_CHECKIN_PHONE_TITLE;
+    $('#checkin-text').textContent = CONFIG.LOYALTY_CHECKIN_PHONE_TEXT;
+    const phone = $('#in-checkin-phone');
+    const saved = phoneGet();
+    show('s-checkin-phone');
+    if (saved && PHONE_RE.test(saved)) {
+      phone.value = saved;
+      validateCheckinPhone();
+      doCheckin(saved, ''); // telefone já conhecido: credita o selo sem precisar de mais nada
+    } else {
+      phone.value = '';
+      validateCheckinPhone();
+      phone.focus();
+    }
+  }
+
+  async function doCheckin(telefone, nome) {
+    const btn = $('#btn-checkin');
+    busy(btn, 'Confirmando...');
+    setMsg($('#checkin-msg'), '');
+    // Mesmo requestId em toda tentativa (inclusive o retry de api()) — o backend usa isso pra
+    // não dar DAILY_LIMIT num reenvio de um selo que já tinha sido concedido com sucesso.
+    if (!state.checkinRequestId) state.checkinRequestId = newRequestId();
+    const r = await api({ action: 'fidelidadeCheckin', telefone: telefone, nome: nome, requestId: state.checkinRequestId });
+    if (!r.network && !r.transient) state.checkinRequestId = '';
+    busy(btn);
+    if (!r.ok) {
+      if (r.code === 'NEED_NAME') {
+        $('#checkin-name-field').hidden = false;
+        $('#checkin-text').textContent = CONFIG.LOYALTY_CHECKIN_NAME_TEXT;
+        $('#in-checkin-name').focus();
+        return;
+      }
+      if (r.code === 'DAILY_LIMIT') {
+        await consultar(telefone);
+        setMsg($('#card-msg'), CONFIG.LOYALTY_CHECKIN_ALREADY_TEXT);
+        return;
+      }
+      setMsg($('#checkin-msg'), r.error || 'Não foi possível confirmar o check-in.');
+      return;
+    }
+    state.telefone = telefone;
+    state.nome = r.nome;
+    state.selosAtuais = r.selosAtuais;
+    state.meta = r.meta;
+    phoneSet(telefone);
+    renderCard();
+    show('s-card');
+    setMsg($('#card-msg'), CONFIG.LOYALTY_CHECKIN_SUCCESS_TEXT, true);
+  }
+
+  // Lê ?checkin=1 na URL fixa gravada na placa NFC/QR perto do caixa. Limpa a URL assim que
+  // detectado, pra um reload/voltar não reenviar o check-in (a idempotência por requestId já
+  // cobre isso também, mas evitar a chamada de novo é mais simples).
+  function initCheckin() {
+    if (!CONFIG.LOYALTY_CHECKIN_ENABLED) return false;
+    const params = new URLSearchParams(location.search);
+    if (params.get('checkin') !== '1') return false;
+    history.replaceState(null, '', location.pathname + location.hash);
+    runCheckin();
+    return true;
+  }
+
   /* ---------- Resgate ---------- */
   async function gerarResgate() {
     const btn = $('#btn-retirar-premio');
@@ -379,6 +525,7 @@
   function init() {
     initBrand();
     $('#btn-retirar-premio').textContent = CONFIG.LOYALTY_REDEEM_BUTTON_TEXT;
+    $('#btn-checkin').textContent = CONFIG.LOYALTY_CHECKIN_BUTTON_TEXT;
 
     const phone = $('#in-phone');
     phone.addEventListener('input', () => { phone.value = maskPhone(phone.value.replace(/\D/g, '')); validatePhone(); });
@@ -391,6 +538,17 @@
     $('#btn-troca-telefone').addEventListener('click', () => { phoneSet(''); goPhone(); });
     $('#btn-retirar-premio').addEventListener('click', gerarResgate);
     $('#btn-redeem-back').addEventListener('click', async () => { await consultar(state.telefone); });
+
+    const checkinPhone = $('#in-checkin-phone');
+    checkinPhone.addEventListener('input', () => { checkinPhone.value = maskPhone(checkinPhone.value.replace(/\D/g, '')); validateCheckinPhone(); });
+    $('#form-checkin').addEventListener('submit', e => {
+      e.preventDefault();
+      if (!validateCheckinPhone()) return;
+      doCheckin(checkinPhone.value, $('#in-checkin-name').value.trim());
+    });
+    $('#btn-checkin-geo-retry').addEventListener('click', runCheckin);
+
+    if (initCheckin()) return;
 
     const saved = phoneGet();
     if (saved && PHONE_RE.test(saved)) {

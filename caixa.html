@@ -236,6 +236,20 @@
       </div>
     </section>
 
+    <!-- Operador do balcão (quem está lançando selo/confirmando resgate agora) -->
+    <section class="screen" id="s-fid-operador">
+      <form class="card" id="form-fid-operador" novalidate>
+        <p class="eyebrow">Cartão fidelidade</p>
+        <h2 tabindex="-1">Quem está no balcão?</h2>
+        <p class="muted">Fica salvo neste aparelho até trocar. Aparece nos registros de selo e resgate.</p>
+        <div class="field">
+          <label for="in-fid-operador">Nome do operador</label>
+          <input id="in-fid-operador" type="text" maxlength="80" placeholder="Seu nome" autocomplete="off">
+        </div>
+        <button class="btn" id="btn-fid-operador-continuar" type="submit" disabled>Continuar</button>
+      </form>
+    </section>
+
     <!-- Menu do cartão fidelidade (só quando CONFIG.LOYALTY_ENABLED) -->
     <section class="screen" id="s-fid-menu">
       <div class="card">
@@ -243,6 +257,10 @@
           <p class="eyebrow" style="margin:0">Cartão fidelidade</p>
           <button class="link" id="btn-logout-fid" type="button">Sair</button>
         </div>
+        <p class="muted" style="margin:0 0 16px">
+          Operador: <strong id="fid-operador-atual"></strong> ·
+          <button class="link" id="btn-fid-trocar-operador" type="button" style="padding:0">trocar</button>
+        </p>
         <h2 tabindex="-1">O que você quer fazer?</h2>
         <button class="btn" id="btn-go-selo" type="button">Adicionar selo</button>
         <button class="btn ghost" id="btn-go-resgate" type="button">Confirmar resgate de prêmio</button>
@@ -281,7 +299,7 @@
       </div>
     </section>
 
-    <!-- Confirmar resgate de prêmio -->
+    <!-- Consultar código de resgate (1º passo — não altera nada) -->
     <section class="screen" id="s-fid-resgate">
       <form class="card" id="form-fid-resgate" novalidate>
         <div class="topline">
@@ -299,8 +317,23 @@
           </div>
         </div>
         <div class="msg" id="fid-resgate-msg" role="alert" hidden></div>
-        <button class="btn" id="btn-fid-confirmar" type="submit" disabled>Confirmar resgate</button>
+        <button class="btn" id="btn-fid-consultar-resgate" type="submit" disabled>Consultar código</button>
       </form>
+    </section>
+
+    <!-- Detalhes + confirmação (2º passo — só aqui o débito acontece) -->
+    <section class="screen" id="s-fid-resgate-confirm">
+      <div class="card">
+        <p class="code-big" id="fid-confirm-code"></p>
+        <h2 tabindex="-1">Confirmar resgate?</h2>
+        <dl class="details">
+          <div><dt>Cliente</dt><dd id="fid-confirm-nome"></dd></div>
+          <div><dt>Selos atuais</dt><dd id="fid-confirm-selos"></dd></div>
+        </dl>
+        <div class="msg" id="fid-resgate-confirm-msg" role="alert" hidden></div>
+        <button class="btn" id="btn-fid-confirmar-final" type="button">Confirmar resgate</button>
+        <button class="btn ghost" id="btn-fid-resgate-outro" type="button">Consultar outro código</button>
+      </div>
     </section>
   </main>
 </div>
@@ -329,7 +362,11 @@
     'Vencido':   { cls: 'expired', label: 'Expirado' }
   };
 
-  const state = { senha: '', coupon: null, requestId: '', fidTelefone: '', fidEncontrado: false, fidRequestId: '' };
+  const state = {
+    senha: '', coupon: null, requestId: '',
+    fidTelefone: '', fidEncontrado: false, fidSeloRequestId: '',
+    fidResgate: null, fidRequestId: ''
+  };
 
   /* ---------- Utilidades ---------- */
   function show(id) {
@@ -347,6 +384,12 @@
   }
   function passGet() { try { return localStorage.getItem(PASS_KEY) || ''; } catch (e) { return ''; } }
   function passSet(v) { try { v ? localStorage.setItem(PASS_KEY, v) : localStorage.removeItem(PASS_KEY); } catch (e) { /* ignora */ } }
+
+  // Quem está no balcão agora — enviado em toda ação de selo/resgate (ver CLAUDE.md). Fica
+  // neste aparelho até trocar; diferente da senha, não é conferido no backend (é só rótulo).
+  const OPERATOR_KEY = CONFIG.STORAGE_KEY + '-operador';
+  function operadorGet() { try { return localStorage.getItem(OPERATOR_KEY) || ''; } catch (e) { return ''; } }
+  function operadorSet(v) { try { v ? localStorage.setItem(OPERATOR_KEY, v) : localStorage.removeItem(OPERATOR_KEY); } catch (e) { /* ignora */ } }
 
   const pad = n => String(n).padStart(2, '0');
   const fmtBR = d => pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
@@ -574,6 +617,28 @@
   function goFidMenu() {
     setMsg($('#fid-selo-msg'), '');
     setMsg($('#fid-resgate-msg'), '');
+    const operador = operadorGet();
+    if (!operador) { goFidOperador(); return; }
+    $('#fid-operador-atual').textContent = operador;
+    show('s-fid-menu');
+  }
+
+  /* ---------- Operador do balcão ---------- */
+  function goFidOperador() {
+    $('#in-fid-operador').value = operadorGet();
+    updateFidOperadorBtn();
+    show('s-fid-operador');
+    $('#in-fid-operador').focus();
+  }
+  function updateFidOperadorBtn() {
+    $('#btn-fid-operador-continuar').disabled = !$('#in-fid-operador').value.trim();
+  }
+  function salvarFidOperador(e) {
+    e.preventDefault();
+    const nome = $('#in-fid-operador').value.trim();
+    if (!nome) return;
+    operadorSet(nome);
+    $('#fid-operador-atual').textContent = nome;
     show('s-fid-menu');
   }
 
@@ -581,6 +646,7 @@
     $('#in-fid-phone').value = '';
     $('#fid-selo-result').hidden = true;
     $('#in-fid-nome').value = '';
+    state.fidSeloRequestId = '';
     setMsg($('#fid-selo-msg'), '');
     updateFidBuscarBtn();
     show('s-fid-selo');
@@ -590,7 +656,8 @@
   function goFidResgate() {
     $('#in-fid-code').value = '';
     setMsg($('#fid-resgate-msg'), '');
-    updateFidConfirmarBtn();
+    updateFidConsultarResgateBtn();
+    state.fidResgate = null;
     state.fidRequestId = '';
     show('s-fid-resgate');
     $('#in-fid-code').focus();
@@ -599,10 +666,13 @@
   function updateFidBuscarBtn() {
     $('#btn-fid-buscar').disabled = !PHONE_RE.test($('#in-fid-phone').value);
   }
-  function updateFidConfirmarBtn() {
-    $('#btn-fid-confirmar').disabled = codePart($('#in-fid-code').value, CONFIG.LOYALTY_CODE_PREFIX).length !== CODE_LEN;
+  function updateFidConsultarResgateBtn() {
+    $('#btn-fid-consultar-resgate').disabled = codePart($('#in-fid-code').value, CONFIG.LOYALTY_CODE_PREFIX).length !== CODE_LEN;
   }
 
+  // Consulta pelo PAPEL CAIXA (fidelidadeConsultarCaixa, exige senha) — diferente da consulta
+  // pública de fidelidade.html: devolve nome e a hora do último selo, pro atendente identificar
+  // o cliente antes de lançar outro (ver fidelidadeConsultarCaixa_ no Code.gs).
   async function buscarFidCliente(e) {
     e.preventDefault();
     const telefone = $('#in-fid-phone').value;
@@ -610,15 +680,16 @@
     const btn = $('#btn-fid-buscar');
     busy(btn, 'Buscando...');
     setMsg($('#fid-selo-msg'), '');
-    const r = await api({ action: 'fidelidadeConsultar', telefone: telefone });
+    const r = await api({ action: 'fidelidadeConsultarCaixa', telefone: telefone, senha: state.senha });
     busy(btn);
     if (!r.ok && r.error !== 'Telefone não encontrado') {
-      setMsg($('#fid-selo-msg'), r.error || 'Não foi possível consultar o cliente.');
+      if (!handleAuthError(r)) setMsg($('#fid-selo-msg'), r.error || 'Não foi possível consultar o cliente.');
       $('#fid-selo-result').hidden = true;
       return;
     }
     state.fidTelefone = telefone;
     state.fidEncontrado = r.ok;
+    state.fidSeloRequestId = '';
     $('#in-fid-nome').value = '';
     $('#fid-selo-result').hidden = false;
     if (r.ok) {
@@ -648,10 +719,22 @@
     if (!state.fidEncontrado && !nome) { setMsg($('#fid-selo-msg'), 'Digite o nome do cliente.'); return; }
     busy(btn, 'Adicionando...');
     setMsg($('#fid-selo-msg'), '');
-    const r = await api({ action: 'fidelidadeAdicionarSelo', telefone: state.fidTelefone, nome: nome, senha: state.senha });
+    // Mesmo requestId em toda tentativa (inclusive o retry de api()): o backend usa isso pra
+    // não dar DAILY_LIMIT num reenvio de um selo que já tinha sido concedido com sucesso.
+    if (!state.fidSeloRequestId) state.fidSeloRequestId = newRequestId();
+    const r = await api({
+      action: 'fidelidadeAdicionarSelo', telefone: state.fidTelefone, nome: nome,
+      senha: state.senha, operador: operadorGet(), requestId: state.fidSeloRequestId
+    });
+    if (!r.network && !r.transient) state.fidSeloRequestId = '';
     busy(btn);
     if (!r.ok) {
-      if (!handleAuthError(r)) setMsg($('#fid-selo-msg'), r.error || 'Não foi possível adicionar o selo.');
+      if (handleAuthError(r)) return;
+      if (r.code === 'DAILY_LIMIT') {
+        setMsg($('#fid-selo-msg'), 'Este cliente já recebeu um selo hoje' + (r.ultimoSelo ? ' (' + fmtDateTime(r.ultimoSelo) + ')' : '') + '.');
+        return;
+      }
+      setMsg($('#fid-selo-msg'), r.error || 'Não foi possível adicionar o selo.');
       return;
     }
     state.fidEncontrado = true;
@@ -661,24 +744,63 @@
     setMsg($('#fid-selo-msg'), 'Selo adicionado.', true);
   }
 
-  async function confirmarResgateFidelidade(e) {
+  /* ---------- Resgate: 1º passo (consulta, não altera nada) ---------- */
+  async function lookupFidResgate(e) {
     e.preventDefault();
     const part = codePart($('#in-fid-code').value, CONFIG.LOYALTY_CODE_PREFIX);
     if (part.length !== CODE_LEN) return;
     const codigo = CONFIG.LOYALTY_CODE_PREFIX + '-' + part;
-    const btn = $('#btn-fid-confirmar');
-    busy(btn, 'Confirmando...');
+    const btn = $('#btn-fid-consultar-resgate');
+    busy(btn, 'Consultando...');
     setMsg($('#fid-resgate-msg'), '');
-    if (!state.fidRequestId) state.fidRequestId = newRequestId();
-    const r = await api({ action: 'fidelidadeValidarResgate', codigo: codigo, senha: state.senha, requestId: state.fidRequestId });
-    if (!r.network && !r.transient) state.fidRequestId = '';
+    const r = await api({ action: 'fidelidadeLookupResgate', codigo: codigo, senha: state.senha });
     busy(btn);
-    updateFidConfirmarBtn();
+    updateFidConsultarResgateBtn();
     if (!r.ok) {
-      if (!handleAuthError(r)) setMsg($('#fid-resgate-msg'), r.error || 'Não foi possível confirmar o resgate.');
+      if (!handleAuthError(r)) {
+        setMsg($('#fid-resgate-msg'), r.code === 'USED' ? 'Código já utilizado. Este código não pode ser resgatado de novo.' : (r.error || 'Não foi possível consultar o código.'));
+      }
       return;
     }
-    setMsg($('#fid-resgate-msg'), 'Resgate confirmado. Entregue o prêmio: ' + CONFIG.LOYALTY_PRIZE_LABEL + '. Cliente: ' + r.nome + '.', true);
+    state.fidResgate = { codigo: codigo, nome: r.nome, selosAtuais: r.selosAtuais };
+    state.fidRequestId = '';
+    renderFidResgateConfirm();
+    show('s-fid-resgate-confirm');
+    focusHeading('s-fid-resgate-confirm');
+  }
+
+  function renderFidResgateConfirm() {
+    const d = state.fidResgate;
+    $('#fid-confirm-code').textContent = d.codigo;
+    $('#fid-confirm-nome').textContent = d.nome || '—';
+    $('#fid-confirm-selos').textContent = d.selosAtuais;
+    setMsg($('#fid-resgate-confirm-msg'), '');
+    busy($('#btn-fid-confirmar-final'));
+  }
+
+  /* ---------- Resgate: 2º passo (débito de verdade) ---------- */
+  async function confirmarResgateFidelidade() {
+    const d = state.fidResgate;
+    if (!d) return;
+    const btn = $('#btn-fid-confirmar-final');
+    busy(btn, 'Confirmando...');
+    setMsg($('#fid-resgate-confirm-msg'), '');
+    // Mesmo requestId em toda tentativa: idempotência tem prioridade sobre "já utilizado"
+    // (ver fidelidadeValidarResgate_ no Code.gs).
+    if (!state.fidRequestId) state.fidRequestId = newRequestId();
+    const r = await api({
+      action: 'fidelidadeValidarResgate', codigo: d.codigo, senha: state.senha,
+      operador: operadorGet(), requestId: state.fidRequestId
+    });
+    if (!r.network && !r.transient) state.fidRequestId = '';
+    busy(btn);
+    if (!r.ok) {
+      if (!handleAuthError(r)) {
+        setMsg($('#fid-resgate-confirm-msg'), r.code === 'USED' ? 'Código já utilizado. Este código não pode ser resgatado de novo.' : (r.error || 'Não foi possível confirmar o resgate.'));
+      }
+      return;
+    }
+    setMsg($('#fid-resgate-confirm-msg'), 'Resgate confirmado. Entregue o prêmio: ' + CONFIG.LOYALTY_PRIZE_LABEL + '. Cliente: ' + r.nome + '.', true);
   }
 
   /* ---------- Inicialização ---------- */
@@ -726,9 +848,15 @@
       fidCode.addEventListener('input', () => {
         const part = codePart(fidCode.value, CONFIG.LOYALTY_CODE_PREFIX);
         if (fidCode.value !== part) fidCode.value = part;
-        updateFidConfirmarBtn();
+        updateFidConsultarResgateBtn();
       });
-      $('#form-fid-resgate').addEventListener('submit', confirmarResgateFidelidade);
+      $('#form-fid-resgate').addEventListener('submit', lookupFidResgate);
+      $('#btn-fid-confirmar-final').addEventListener('click', confirmarResgateFidelidade);
+      $('#btn-fid-resgate-outro').addEventListener('click', goFidResgate);
+
+      $('#form-fid-operador').addEventListener('submit', salvarFidOperador);
+      $('#in-fid-operador').addEventListener('input', updateFidOperadorBtn);
+      $('#btn-fid-trocar-operador').addEventListener('click', goFidOperador);
 
       // Só mostra o link de troca se o outro produto (roleta) TAMBÉM estiver ligado.
       if (CONFIG.REWARD_MODE === 'ROLETA') {
